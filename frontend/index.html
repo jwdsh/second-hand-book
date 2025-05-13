@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>图书估价系统</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>📖 二手图书估价系统</h1>
+        
+        <div class="upload-section">
+            <form id="evalForm">
+                <div class="form-group">
+                    <label>上传图书照片：</label>
+                    <input type="file" id="bookImage" accept="image/*">
+                    <div class="preview"></div>
+                </div>
+                
+                <div class="form-group">
+                    <label>或输入ISBN：</label>
+                    <input type="text" id="isbnInput" 
+                           placeholder="13位数字编号，例如：9787115541480">
+                </div>
+                
+                <button type="submit">开始评估</button>
+            </form>
+        </div>
+
+        <div class="result-section hidden">
+            <h2>评估结果</h2>
+            <div id="resultContent"></div>
+            <button onclick="location.reload()">新的评估</button>
+        </div>
+
+        <div class="history-section">
+            <h3>最近评估记录</h3>
+            <ul id="historyList"></ul>
+        </div>
+    </div>
+    <script src="app.js"></script>
+</body>
+</html>
