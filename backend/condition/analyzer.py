@@ -22,9 +22,11 @@ class BookAnalyzer:
         使用新版千帆API分析图书封面（支持多张图片），返回书名和综合品相评分
         
         参数:
+            images: List[UploadFile]
+                - UploadFile对象列表，每个对象代表一张图书封面图片
             images: 同一本书的多张图片列表（不同角度）
         
-        返回格式: (书名, 综合评分)
+        返回格式: (书名, 综合评分)元组类型
         """
         try:
             # 1. 准备图片内容
@@ -43,8 +45,8 @@ class BookAnalyzer:
             prompt = (
                 "你是一名专业的图书评估专家。请根据提供的一张或多张图书照片（同一本书的不同角度）完成以下任务：\n\n"
                 "1. 识别图书书名（中文书名使用《》标注，外文书名使用斜体）\n"
-                "2. 综合评估图书品相，考虑以下因素：\n"
-                "   - 封面/封底是否有破损、撕裂或折痕\n"
+                "2. 综合严格公正评估图书品相，考虑以下因素：\n"
+                "   - 重点注意封面/封底是否有破损、撕裂或折痕\n"
                 "   - 页面是否有污渍、黄斑或涂写\n"
                 "   - 书角是否有磨损或卷曲\n"
                 "   - 书脊是否完好，有无开裂\n"
@@ -60,11 +62,11 @@ class BookAnalyzer:
             )
             
             # 3. 构造API请求
-            url = "https://qianfan.baidubce.com/v2/chat/completions"
+            url = "https://qianfan.baidubce.com/v2/chat/completions"  # 新版API地址
             
             headers = {
                 "Content-Type": "application/json",
-                "Authorization": f"Bearer {QIANFAN_API_KEY}" 
+                "Authorization": f"Bearer {QIANFAN_API_KEY}"  # 新版认证方式
             }
             
             # 创建消息内容 - 文字提示 + 所有图片
@@ -72,7 +74,7 @@ class BookAnalyzer:
             content.extend(image_contents)
             
             payload = {
-                "model": "ernie-4.5-8k-preview",  
+                "model": "ernie-4.5-turbo-vl-preview",  
                 "messages": [
                     {
                         "role": "user",
@@ -84,7 +86,7 @@ class BookAnalyzer:
             }
             
             # 4. 发送请求
-            response = requests.post(url, headers=headers, json=payload, timeout=60)
+            response = requests.post(url, headers=headers, json=payload, timeout=100)
             
             # 5. 处理响应
             if response.status_code == 200:
@@ -107,7 +109,11 @@ class BookAnalyzer:
     @staticmethod
     def parse_response(reply: str) -> Tuple[str, float]:
         #print(f"原始回复内容:\n{reply}\n{'='*50}")
-
+        """
+        解析模型回复，提取书名和评分
+        
+        返回格式: (书名, 评分)
+        """
         # 初始化默认值
         book_title = "未知书名"
         score = 0.5
@@ -116,20 +122,22 @@ class BookAnalyzer:
             # 尝试提取书名
             title_match = re.search(r"书名[：:]\s*([《](.+?)[》]|(.+))", reply)
             if title_match:
-        
+                # 优先提取中文书名（《》内的内容）
                 if title_match.group(2):
                     book_title = title_match.group(2)
-    
+                # 如果没有《》，提取冒号后的内容
                 elif title_match.group(3):
                     book_title = title_match.group(3).strip()
             else:
-       
+                # 备选：尝试匹配书名（可能没有"书名："前缀）
                 alt_match = re.search(r"《(.+?)》", reply)
                 if alt_match:
                     book_title = alt_match.group(1)
-
+            
+            # 清理书名中的可能多余字符
             book_title = book_title.replace("《", "").replace("》", "").strip()
-     
+            
+            # 尝试提取评分 - 注意现在匹配"综合评分"
             score_match = re.search(r"(综合)?评分[：:]\s*(\d?\.\d{1,3})", reply)
             if score_match:
                 score = float(score_match.group(2))
@@ -137,7 +145,7 @@ class BookAnalyzer:
                 if score < 0 or score > 1:
                     score = 0.5
             else:
-  
+                # 备选：尝试匹配浮点数
                 score_match_alt = re.search(r"\b0?\.\d{1,3}\b|\b1\.0{1,3}\b", reply)
                 if score_match_alt:
                     score = float(score_match_alt.group())
