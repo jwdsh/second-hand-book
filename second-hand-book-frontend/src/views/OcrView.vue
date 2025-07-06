@@ -1,21 +1,80 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElLoading } from 'element-plus'
+import { API_ENDPOINTS } from '@/config/api'
 
 const router = useRouter()
 const isbn = ref('')
 const image = ref<File | null>(null)
 const imageUrl = ref<string | null>(null)
+const loading = ref(false)
 
-function handleOcr() {
+async function handleOcr() {
   if (!isbn.value && !image.value) {
     ElMessage.warning('请填写ISBN/书名或上传图片')
     return
   }
-  // 这里调用OCR识别API，识别出ISBN或书名
-  // 假设识别成功，跳转到价格页
-  router.push({ name: 'price', query: { isbn: isbn.value } })
+  
+  loading.value = true
+  const loadingInstance = ElLoading.service({
+    lock: true,
+    text: '正在识别并估价...',
+    background: 'rgba(0, 0, 0, 0.7)'
+  })
+
+  try {
+    console.log('🚀 [OCR Debug] 开始完整评估流程')
+    console.log('📋 [OCR Debug] 输入参数:', { 
+      hasISBN: !!isbn.value, 
+      hasImage: !!image.value,
+      imageName: image.value?.name,
+      note: '后端只支持当当网价格获取'
+    })
+    
+    // 调用后端评估接口
+    const formData = new FormData()
+    if (image.value) {
+      formData.append('file', image.value)
+      console.log('� [OCR Debug] 已添加图片文件')
+    }
+    if (isbn.value) {
+      formData.append('isbn', isbn.value)
+      console.log('📖 [OCR Debug] 已添加ISBN:', isbn.value)
+    }
+
+    console.log('📡 [OCR Debug] 发送请求到:', API_ENDPOINTS.EVALUATE)
+    const response = await fetch(API_ENDPOINTS.EVALUATE, {
+      method: 'POST',
+      body: formData
+    })
+
+    console.log('� [OCR Debug] 收到响应状态:', response.status)
+    const result = await response.json()
+    console.log('📊 [OCR Debug] 后端返回完整数据:', JSON.stringify(result, null, 2))
+
+    if (result.error) {
+      console.error('❌ [OCR Debug] 后端返回错误:', result.error)
+      ElMessage.error(result.error)
+      return
+    }
+
+    // 将结果存储到 sessionStorage，供后续页面使用
+    console.log('💾 [OCR Debug] 保存评估结果到sessionStorage')
+    sessionStorage.setItem('evaluationResult', JSON.stringify(result))
+    
+    // 直接跳转到最终结果页面，因为后端已经完成了完整的评估
+    console.log('🔄 [OCR Debug] 跳转到最终结果页面')
+    router.push({ name: 'final' })
+    
+    ElMessage.success('评估完成！')
+  } catch (error) {
+    console.error('💥 [OCR Debug] 评估失败:', error)
+    ElMessage.error('评估失败，请检查网络连接或稍后重试')
+  } finally {
+    loading.value = false
+    loadingInstance.close()
+  }
 }
 
 function handleUpload(file: File) {
@@ -29,15 +88,11 @@ function handleUpload(file: File) {
     <div class="step-bar">
       <div class="step active">
         <el-icon><document /></el-icon>
-        <span>识别书籍信息</span>
-      </div>
-      <div class="step">
-        <el-icon><coin /></el-icon>
-        <span>查询价格</span>
+        <span>图书评估</span>
       </div>
       <div class="step">
         <el-icon><medal /></el-icon>
-        <span>定价结果</span>
+        <span>评估结果</span>
       </div>
     </div>
     <div class="content-row">
@@ -60,12 +115,14 @@ function handleUpload(file: File) {
       </div>
       <div class="divider"></div>
       <div class="input-area">
-        <div class="input-title">输入ISBN或书名</div>
+        <div class="input-title">输入ISBN</div>
         <el-input v-model="isbn" placeholder="请输入ISBN或书名" clearable class="modern-input" />
         <div class="input-tip">可手动输入或扫描图片自动识别</div>
       </div>
     </div>
-    <el-button type="success" @click="handleOcr" class="modern-submit-btn">识别并查询价格</el-button>
+    <el-button type="success" @click="handleOcr" class="modern-submit-btn" :loading="loading">
+      {{ loading ? '评估中...' : '开始评估' }}
+    </el-button>
     <el-button class="history-btn-float-in-card" type="info" plain @click="router.push({ name: 'history' })">
       历史定价
     </el-button>
@@ -73,9 +130,9 @@ function handleUpload(file: File) {
 </template>
 
 <script lang="ts">
-import { Document, Coin, Medal } from '@element-plus/icons-vue'
+import { Document, Medal } from '@element-plus/icons-vue'
 export default {
-  components: { document: Document, coin: Coin, medal: Medal },
+  components: { document: Document, medal: Medal },
 }
 </script>
 

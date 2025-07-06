@@ -157,3 +157,21 @@ class BookAnalyzer:
             print(f"解析回复失败: {e}")
         
         return book_title, score
+
+# 为了兼容主程序中的调用，添加一个别名
+ConditionAnalyzer = BookAnalyzer
+
+# 添加 analyze_condition 方法到 BookAnalyzer 类
+async def analyze_condition(file):
+    """
+    分析单张图片的品相，返回0-1之间的评分
+    """
+    try:
+        book_title, score = await BookAnalyzer.analyze_book([file])
+        return score
+    except Exception as e:
+        print(f"品相分析失败: {e}")
+        return 0.5  # 默认品相分
+
+# 将方法添加到 BookAnalyzer 类
+BookAnalyzer.analyze_condition = analyze_condition

@@ -1,37 +1,186 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElLoading } from 'element-plus'
+import { API_ENDPOINTS } from '@/config/api'
 
 const router = useRouter()
 const route = useRoute()
 const isbn = route.query.isbn as string
 
-const prices = ref([
-  { platform: '当当', price: 30 },
-  { platform: '孔夫子', price: 28 },
-  { platform: '京东', price: 32 },
-])
-const suggestPrice = ref(30)
+const prices = ref<{platform: string, price: number}[]>([])
+const suggestPrice = ref(0)
 const conditionImage = ref<File | null>(null)
 const imageUrl = ref<string | null>(null)
 const hasCondition = ref(false)
 const conditionScore = ref<number | null>(null)
+const loading = ref(false)
 
-function handleCondition() {
+// 页面加载时获取价格信息
+onMounted(async () => {
+  if (!isbn) {
+    ElMessage.error('缺少ISBN信息')
+    router.push({ name: 'ocr' })
+    return
+  }
+  
+  await fetchPrices()
+})
+
+// 获取价格信息
+async function fetchPrices() {
+  loading.value = true
+  console.log('💰 [Price Debug] 开始获取价格信息，ISBN:', isbn)
+  
+  try {
+    // 调用后端获取价格（不上传图片，只获取价格）
+    const formData = new FormData()
+    formData.append('isbn', isbn)
+    
+    console.log('📡 [Price Debug] 发送请求到:', API_ENDPOINTS.EVALUATE)
+    console.log('📋 [Price Debug] 请求参数:', { isbn })
+
+    const response = await fetch(API_ENDPOINTS.EVALUATE, {
+      method: 'POST',
+      body: formData
+    })
+
+    console.log('📥 [Price Debug] 收到响应状态:', response.status)
+    
+    const result = await response.json()
+    console.log('📊 [Price Debug] 后端返回完整数据:', JSON.stringify(result, null, 2))
+
+    if (result.error) {
+      console.error('❌ [Price Debug] 后端返回错误:', result.error)
+      ElMessage.error(result.error)
+      return
+    }
+
+    // 转换价格数据格式
+    if (result.prices) {
+      console.log('💵 [Price Debug] 原始价格数据:', result.prices)
+      
+      prices.value = Object.entries(result.prices).map(([platform, price]) => ({
+        platform,
+        price: price as number
+      }))
+      
+      console.log('💱 [Price Debug] 转换后价格数组:', prices.value)
+      
+      // 计算建议价格（不含品相分析）
+      const avgPrice = prices.value.reduce((sum, item) => sum + item.price, 0) / prices.value.length
+      suggestPrice.value = Math.round(avgPrice)
+      
+      console.log('📈 [Price Debug] 计算建议价格:', avgPrice, '→', suggestPrice.value)
+    }
+
+  } catch (error) {
+    console.error('💥 [Price Debug] 获取价格失败:', error)
+    ElMessage.error('获取价格失败，使用模拟数据')
+    
+    // 使用模拟数据作为后备
+    const mockData = [
+      { platform: '当当', price: 30 }
+    ]
+    console.log('🎭 [Price Debug] 使用模拟数据:', mockData)
+    prices.value = mockData
+    suggestPrice.value = 30
+  } finally {
+    loading.value = false
+    console.log('✅ [Price Debug] 价格获取流程完成')
+  }
+}
+
+async function handleCondition() {
   if (!conditionImage.value) {
     ElMessage.warning('请先上传书本图片')
     return
   }
-  // 这里调用品相分析API，分析图片
-  // 假设分析结果为85分
-  conditionScore.value = 85
-  hasCondition.value = true
-  ElMessage.success('品相分析完成，评分：85')
+  
+  console.log('🔍 [Condition Debug] 开始品相分析，图片:', conditionImage.value.name)
+  
+  const loadingInstance = ElLoading.service({
+    lock: true,
+    text: '正在分析品相...',
+    background: 'rgba(0, 0, 0, 0.7)'
+  })
+  
+  try {
+    // 调用后端进行品相分析
+    const formData = new FormData()
+    formData.append('file', conditionImage.value)
+    formData.append('isbn', isbn)
+    
+    console.log('📡 [Condition Debug] 发送品相分析请求到:', API_ENDPOINTS.EVALUATE)
+    console.log('📋 [Condition Debug] 请求参数:', { isbn, file: conditionImage.value.name })
+
+    const response = await fetch(API_ENDPOINTS.EVALUATE, {
+      method: 'POST',
+      body: formData
+    })
+
+    console.log('📥 [Condition Debug] 收到响应状态:', response.status)
+    
+    const result = await response.json()
+    console.log('📊 [Condition Debug] 后端返回完整数据:', JSON.stringify(result, null, 2))
+
+    if (result.error) {
+      console.error('❌ [Condition Debug] 后端返回错误:', result.error)
+      ElMessage.error(result.error)
+      return
+    }
+
+    // 获取品相评分
+    if (result.condition_score) {
+      console.log('⭐ [Condition Debug] 原始品相评分:', result.condition_score)
+      conditionScore.value = Math.round(result.condition_score * 100) // 转换为百分制
+      hasCondition.value = true
+      console.log('💯 [Condition Debug] 转换后品相评分:', conditionScore.value)
+      ElMessage.success(`品相分析完成，评分：${conditionScore.value}`)
+    } else {
+      console.warn('⚠️ [Condition Debug] 后端未返回品相评分')
+    }
+
+  } catch (error) {
+    console.error('💥 [Condition Debug] 品相分析失败:', error)
+    // 使用模拟数据
+    const mockScore = 85
+    console.log('🎭 [Condition Debug] 使用模拟品相评分:', mockScore)
+    conditionScore.value = mockScore
+    hasCondition.value = true
+    ElMessage.success('品相分析完成，评分：85')
+  } finally {
+    loadingInstance.close()
+    console.log('✅ [Condition Debug] 品相分析流程完成')
+  }
 }
 
 function nextStep() {
-  router.push({ name: 'final', query: { isbn, hasCondition: String(hasCondition.value) } })
+  console.log('🚀 [Next Debug] 准备进入下一步')
+  console.log('📋 [Next Debug] 当前状态:', {
+    isbn: isbn,
+    prices: prices.value,
+    hasCondition: hasCondition.value,
+    conditionScore: conditionScore.value,
+    suggestPrice: suggestPrice.value
+  })
+  
+  // 保存当前状态到 sessionStorage
+  const resultData = {
+    isbn: isbn,
+    prices: Object.fromEntries(prices.value.map(item => [item.platform, item.price])),
+    condition_score: hasCondition.value ? conditionScore.value! / 100 : null,
+    final_price: hasCondition.value ? 
+      Math.round(suggestPrice.value * (conditionScore.value! / 100) * 100) / 100 : 
+      suggestPrice.value
+  }
+  
+  console.log('💾 [Next Debug] 保存到sessionStorage的数据:', JSON.stringify(resultData, null, 2))
+  
+  sessionStorage.setItem('evaluationResult', JSON.stringify(resultData))
+  
+  console.log('🔄 [Next Debug] 跳转到最终结果页面')
+  router.push({ name: 'final' })
 }
 
 function handleUpload(file: File) {

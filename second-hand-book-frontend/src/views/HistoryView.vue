@@ -2,7 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { ElMessageBox, ElMessage } from 'element-plus'
 import { Delete, PriceTag, Star, Collection } from '@element-plus/icons-vue'
-import BackButton from '@/components/BackButton.vue' // 导入返回按钮组件
+import BackButton from '@/components/BackButton.vue'
 
 interface PriceHistoryItem {
   time: string
@@ -16,7 +16,15 @@ interface PriceHistoryItem {
 const history = ref<PriceHistoryItem[]>([])
 
 function loadHistory() {
-  history.value = JSON.parse(sessionStorage.getItem('priceHistory') || '[]')
+  console.log('📚 [History Debug] 开始加载历史记录')
+  
+  // 只从浏览器本地存储获取历史记录
+  const rawData = sessionStorage.getItem('priceHistory') || '[]'
+  console.log('💾 [History Debug] 从sessionStorage读取的原始数据:', rawData)
+  
+  history.value = JSON.parse(rawData)
+  console.log('📊 [History Debug] 解析后的历史记录:', JSON.stringify(history.value, null, 2))
+  console.log('📈 [History Debug] 历史记录数量:', history.value.length)
 }
 
 function handleClear() {
