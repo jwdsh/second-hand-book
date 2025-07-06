@@ -1,5 +1,5 @@
 import asyncio
-from crawler import DangDangCrawler
+from .crawler import DangDangCrawler
 from pathlib import Path
 from config import INPUT_FILE
 
